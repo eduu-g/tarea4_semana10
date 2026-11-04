@@ -1,0 +1,411 @@
+# =============================================================================
+# T4 — PORTAFOLIO DE VISUALIZACIÓN CON GGPLOT2
+# Parte 2 · Semana 11 · Cinco gráficos y una figura compuesta
+# Fundamentos de Programación para Análisis Económico · UdeC-EAN
+#
+# Autor: [ESCRIBE TU NOMBRE]
+# Fecha: [ESCRIBE LA FECHA]
+#
+# Ejecutar desde la carpeta principal del proyecto .Rproj.
+# Archivos requeridos dentro de data/raw/:
+#   - casen_reducido.csv
+#   - ene-2026-06-mjj.csv
+#
+# Paquetes: dplyr, tidyr, ggplot2, scales, ggrepel, patchwork
+# Instala previamente los que falten con install.packages("nombre_paquete").
+# =============================================================================
+
+# 0. Preparación ---------------------------------------------------------------
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+library(ggrepel)
+library(patchwork)
+
+azul <- "#0072B2"
+naranjo <- "#D55E00"
+gris <- "#B8BEC5"
+
+pesos <- label_currency(prefix = "$", big.mark = ".", decimal.mark = ",", accuracy = 1)
+
+# Tema propio inspirado en el laboratorio de Semana 11.
+tema_t4 <- function(base = 12) {
+  theme_minimal(base_size = base) +
+    theme(
+      plot.title = element_text(face = "bold", color = "#223C6A"),
+      panel.grid.minor = element_blank(),
+      legend.position = "bottom",
+      plot.caption = element_text(size = 8, color = "grey35")
+    )
+}
+
+theme_set(tema_t4())
+
+dir.create("output/figuras", recursive = TRUE, showWarnings = FALSE)
+
+archivos <- c(
+  "data/raw/casen_reducido.csv",
+  "data/raw/ene-2026-06-mjj.csv"
+)
+if (!all(file.exists(archivos))) {
+  stop("Faltan archivos en data/raw/. Revisa los nombres y la estructura del proyecto.")
+}
+
+# 1. Gráfico 1 — Scatter CASEN: educación e ingreso por género -----------------
+
+casen <- read.csv("data/raw/casen_reducido.csv")
+
+casen_grafico <- casen |>
+  filter(!is.na(ingreso), !is.na(educ), !is.na(genero)) |>
+  mutate(
+    genero = factor(genero, levels = c("F", "M"),
+                    labels = c("Mujeres", "Hombres"))
+  )
+
+p1_casen <- ggplot(casen_grafico, aes(x = educ, y = ingreso, color = genero)) +
+  geom_point(size = 2.2, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  scale_color_manual(values = c("Mujeres" = naranjo, "Hombres" = azul)) +
+  scale_y_continuous(labels = pesos) +
+  labs(
+    title = "En ambos géneros, el ingreso aumenta con los años de escolaridad",
+    subtitle = "Relación descriptiva en la muestra reducida de CASEN",
+    x = "Años de escolaridad",
+    y = "Ingreso mensual (pesos chilenos)",
+    color = NULL,
+    caption = "Fuente: CASEN, muestra reducida utilizada en el curso; 55 observaciones con ingreso válido."
+  )
+
+p1_casen
+
+ggsave(
+  "output/figuras/t4_p2_grafico1_casen.png",
+  plot = p1_casen, width = 8, height = 5, units = "in", dpi = 300
+)
+
+# 2. Preparar ENE: ocupados, sexo, región e informalidad ----------------------
+
+# read.csv2() corresponde al archivo ENE: separador ; y decimal con coma.
+ene <- read.csv2("data/raw/ene-2026-06-mjj.csv")
+
+nombres_regiones <- c(
+  "Tarapacá", "Antofagasta", "Atacama", "Coquimbo", "Valparaíso",
+  "O'Higgins", "Maule", "Biobío", "La Araucanía", "Los Lagos",
+  "Aysén", "Magallanes", "Metropolitana", "Los Ríos",
+  "Arica y Parinacota", "Ñuble"
+)
+
+# El manual ENE identifica activ == 1 como ocupado/a y ocup_form == 2
+# como ocupado/a informal. Se conservan pesos de expansión positivos.
+ene_ocupados <- ene |>
+  filter(activ == 1, !is.na(fact_cal), fact_cal > 0) |>
+  mutate(
+    region_txt = factor(region, levels = 1:16, labels = nombres_regiones),
+    sexo_txt = factor(sexo, levels = c(1, 2), labels = c("Hombres", "Mujeres"))
+  )
+
+ene_formalidad <- ene_ocupados |>
+  filter(ocup_form %in% c(1, 2), !is.na(region_txt), !is.na(sexo_txt)) |>
+  mutate(informal = if_else(ocup_form == 2, 1, 0))
+
+# Promedio nacional ponderado: una proporción de informalidad ponderada por fact_cal.
+tasa_nacional <- weighted.mean(
+  ene_formalidad$informal,
+  w = ene_formalidad$fact_cal,
+  na.rm = TRUE
+)
+
+# 3. Gráfico 2 — Tasa de informalidad por región -------------------------------
+
+# Se calcula una tasa ponderada por región.
+regional_informalidad <- ene_formalidad |>
+  group_by(region_txt) |>
+  summarise(
+    n_muestra = n(),
+    tasa_informal = weighted.mean(informal, w = fact_cal, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(destacada = region_txt == "Ñuble") |>
+  arrange(tasa_informal)
+
+# Valores para redactar un título que comunique el hallazgo.
+tasa_nuble <- regional_informalidad |>
+  filter(region_txt == "Ñuble") |>
+  pull(tasa_informal)
+
+nombre_region_mayor <- regional_informalidad |>
+  slice_max(tasa_informal, n = 1, with_ties = FALSE) |>
+  pull(region_txt) |>
+  as.character()
+
+titulo_regional <- paste0(
+  "Ñuble registra ", percent(tasa_nuble, accuracy = 0.1, decimal.mark = ","),
+  " de informalidad, por sobre el ", percent(tasa_nacional, accuracy = 0.1, decimal.mark = ","),
+  " nacional"
+)
+
+p2_regiones <- ggplot(
+  regional_informalidad,
+  aes(x = tasa_informal, y = reorder(region_txt, tasa_informal))
+) +
+  geom_col(aes(fill = destacada), width = 0.72) +
+  geom_vline(xintercept = tasa_nacional, color = "grey30",
+             linetype = "dashed", linewidth = 0.8) +
+  geom_text(
+    aes(label = percent(tasa_informal, accuracy = 0.1, decimal.mark = ",")),
+    hjust = -0.12, size = 3.1, color = "grey20"
+  ) +
+  scale_fill_manual(
+    values = c("FALSE" = "#C7CCD1", "TRUE" = naranjo),
+    guide = "none"
+  ) +
+  scale_x_continuous(
+    labels = label_percent(accuracy = 1, decimal.mark = ","),
+    expand = expansion(mult = c(0, 0.18))
+  ) +
+  coord_cartesian(xlim = c(0, max(regional_informalidad$tasa_informal) * 1.18)) +
+  labs(
+    title = titulo_regional,
+    subtitle = paste0("La tasa regional más alta corresponde a ", nombre_region_mayor,
+                      "; línea discontinua: promedio nacional"),
+    x = "Tasa de ocupación informal",
+    y = NULL,
+    caption = "Fuente: ENE, mayo-julio de 2026. Personas ocupadas con formalidad identificada; ponderado con fact_cal."
+  )
+
+p2_regiones
+
+ggsave(
+  "output/figuras/t4_p2_grafico2_informalidad_region.png",
+  plot = p2_regiones, width = 9, height = 7, units = "in", dpi = 300
+)
+
+# 4. Gráfico 3 — Distribución de horas habituales por sexo --------------------
+
+# Se eliminan NA y los códigos centinela 888 y 999 en habituales.
+horas_ocupados <- ene_ocupados |>
+  filter(
+    !is.na(habituales),
+    !(habituales %in% c(888, 999)),
+    sexo %in% c(1, 2)
+  ) |>
+  mutate(
+    sexo_txt = factor(sexo, levels = c(1, 2), labels = c("Hombres", "Mujeres"))
+  )
+
+# Boxplot: permite comparar mediana, rango intercuartílico y valores extremos.
+# Se presenta como distribución de la muestra (no ponderada), no como percentiles
+# poblacionales ponderados.
+p3_horas <- ggplot(horas_ocupados, aes(x = sexo_txt, y = habituales, fill = sexo_txt)) +
+  geom_boxplot(width = 0.58, outlier.alpha = 0.18, show.legend = FALSE) +
+  scale_fill_manual(values = c("Hombres" = azul, "Mujeres" = naranjo)) +
+  scale_y_continuous(labels = label_number(accuracy = 1)) +
+  labs(
+    title = "La mediana de horas habituales es de 42 semanales en ambos sexos",
+    subtitle = "Distribución de la muestra ocupada con horas válidas",
+    x = NULL,
+    y = "Horas habituales trabajadas por semana",
+    caption = "Fuente: ENE, mayo-julio de 2026. Muestra de personas ocupadas; se excluyen NA, 888 y 999. Boxplot no ponderado."
+  )
+
+p3_horas
+
+ggsave(
+  "output/figuras/t4_p2_grafico3_horas_sexo.png",
+  plot = p3_horas, width = 8, height = 5, units = "in", dpi = 300
+)
+
+# Justificación del geom elegido:
+# Se utiliza boxplot porque resume mediana, dispersión central y observaciones
+# extremas de cada sexo. No requiere elegir un ancho de banda como la densidad
+# y es más compacto que mostrar decenas de miles de puntos individuales.
+# Como el boxplot se calcula sin ponderar, el título y la caption se refieren
+# explícitamente a la muestra, no a toda la población de Chile.
+
+# 5. Gráfico 4 — Informalidad de mujeres contra hombres por región -------------
+
+regional_sexo <- ene_formalidad |>
+  group_by(region_txt, sexo_txt) |>
+  summarise(
+    tasa_informal = weighted.mean(informal, w = fact_cal, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  pivot_wider(names_from = sexo_txt, values_from = tasa_informal) |>
+  mutate(destacada = region_txt == "Ñuble")
+
+n_regiones_mujer_mayor <- sum(
+  regional_sexo$Mujeres > regional_sexo$Hombres,
+  na.rm = TRUE
+)
+
+titulo_sexo_region <- paste0(
+  "La informalidad femenina supera la masculina en ",
+  n_regiones_mujer_mayor, " de 16 regiones"
+)
+
+limite_tasas <- max(
+  c(regional_sexo$Hombres, regional_sexo$Mujeres),
+  na.rm = TRUE
+) * 1.12
+
+p4_sexo_region <- ggplot(
+  regional_sexo,
+  aes(x = Hombres, y = Mujeres, color = destacada)
+) +
+  geom_abline(slope = 1, intercept = 0, color = "grey45",
+              linetype = "dashed", linewidth = 0.8) +
+  geom_point(size = 3) +
+  geom_text_repel(
+    aes(label = region_txt),
+    seed = 2026,
+    size = 3.1,
+    max.overlaps = Inf,
+    box.padding = 0.35,
+    point.padding = 0.25,
+    min.segment.length = 0,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c("FALSE" = "grey45", "TRUE" = naranjo),
+    guide = "none"
+  ) +
+  scale_x_continuous(
+    labels = label_percent(accuracy = 1, decimal.mark = ","),
+    limits = c(0, limite_tasas),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  scale_y_continuous(
+    labels = label_percent(accuracy = 1, decimal.mark = ","),
+    limits = c(0, limite_tasas),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  coord_equal() +
+  labs(
+    title = titulo_sexo_region,
+    subtitle = "Puntos sobre la diagonal: tasa femenina mayor; puntos bajo la diagonal: tasa masculina mayor",
+    x = "Tasa de informalidad de hombres",
+    y = "Tasa de informalidad de mujeres",
+    caption = "Fuente: ENE, mayo-julio de 2026. Tasas regionales ponderadas con fact_cal."
+  )
+
+p4_sexo_region
+
+ggsave(
+  "output/figuras/t4_p2_grafico4_informalidad_sexo_region.png",
+  plot = p4_sexo_region, width = 8, height = 7, units = "in", dpi = 300
+)
+
+# 6. Gráfico 5 — Pregunta propia: informalidad según tramo de edad -------------
+
+# Pregunta: ¿cómo cambia la tasa de ocupación informal entre los tramos de edad?
+tramos_edad <- c(
+  "15–19", "20–24", "25–29", "30–34", "35–39", "40–44",
+  "45–49", "50–54", "55–59", "60–64", "65–69", "70 o más"
+)
+
+informalidad_edad <- ene_formalidad |>
+  filter(tramo_edad %in% 1:12) |>
+  mutate(
+    tramo_edad_txt = factor(tramo_edad, levels = 1:12, labels = tramos_edad)
+  ) |>
+  group_by(tramo_edad_txt) |>
+  summarise(
+    n_muestra = n(),
+    tasa_informal = weighted.mean(informal, w = fact_cal, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+p5_edad <- ggplot(
+  informalidad_edad,
+  aes(x = tramo_edad_txt, y = tasa_informal, group = 1)
+) +
+  geom_line(color = azul, linewidth = 1) +
+  geom_point(color = naranjo, size = 2.7) +
+  scale_y_continuous(labels = label_percent(accuracy = 1, decimal.mark = ",")) +
+  labs(
+    title = "La informalidad cae en edades medias y aumenta con fuerza en edades mayores",
+    subtitle = "La tasa ponderada es más baja en 35–39 años y sube desde los 60",
+    x = "Tramo de edad",
+    y = "Tasa de ocupación informal",
+    caption = "Fuente: ENE, mayo-julio de 2026. Personas ocupadas con formalidad identificada; ponderado con fact_cal."
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p5_edad
+
+ggsave(
+  "output/figuras/t4_p2_grafico5_informalidad_edad.png",
+  plot = p5_edad, width = 9, height = 5.5, units = "in", dpi = 300
+)
+
+# Hallazgos descriptivos de la base utilizada:
+# La tasa ponderada es aproximadamente 21,2 % en 35–39 años, 35,3 % en 60–64,
+# 51,9 % en 65–69 y 62,0 % en 70 años o más. En 15–19 años también es elevada
+# (44,1 %), por lo que la relación no es estrictamente creciente durante toda la vida.
+
+# 7. Figura compuesta con patchwork --------------------------------------------
+
+# Se combinan tres gráficos de ENE relacionados con la informalidad:
+# A: diferencias territoriales; B: diferencias entre mujeres y hombres;
+# C: variación según tramo de edad.
+figura <- (p2_regiones | (p4_sexo_region / p5_edad)) +
+  plot_layout(widths = c(1, 1.3)) +
+  plot_annotation(
+    title = "La informalidad varía según territorio, sexo y edad",
+    caption = paste0(
+      "Fuente: ENE, mayo-julio de 2026. Estimaciones de informalidad ponderadas con fact_cal; ",
+      "personas ocupadas (activ = 1). Los paneles A, B y C presentan tasas ponderadas por región, sexo y tramo de edad."
+    ),
+    tag_levels = "A"
+  )
+
+figura
+
+# Exportar la figura compuesta en PNG de 300 dpi y en PDF vectorial.
+ggsave(
+  filename = "output/figuras/t4_p2_figura_compuesta.png",
+  plot = figura, width = 14, height = 9, units = "in", dpi = 300
+)
+
+ggsave(
+  filename = "output/figuras/t4_p2_figura_compuesta.pdf",
+  plot = figura, width = 14, height = 9, units = "in"
+)
+
+# 8. Reflexión para README (media página) --------------------------------------
+
+# 1. ¿Cuál de los cinco gráficos comunica mejor su hallazgo y por qué?
+# El gráfico 4 comunica de forma directa la comparación regional por sexo:
+# la diagonal y = x funciona como referencia y permite identificar qué regiones
+# tienen una tasa femenina superior o inferior a la masculina. Las etiquetas de
+# ggrepel permiten reconocer las regiones sin depender de una leyenda extensa.
+#
+# 2. En el gráfico 3, ¿por qué elegiste ese geom y no otro?
+# Se eligió boxplot porque resume la mediana, los cuartiles y los valores extremos
+# de las horas habituales por sexo. Es una comparación compacta y no depende de
+# un parámetro de suavizado como la densidad. Se aclara que es una descripción
+# no ponderada de la muestra y no una estimación de cuantiles poblacionales.
+#
+# 3. ¿Qué agrega la figura compuesta que no dan los gráficos por separado?
+# Reúne en una misma lectura la dimensión territorial, la diferencia por sexo y
+# el patrón por edad. Los paneles se complementan: permiten observar que la tasa
+# de informalidad no es uniforme entre regiones ni grupos, sin confundir las
+# distintas comparaciones ni perder las escalas propias de cada gráfico.
+
+# 9. Comprobaciones finales ----------------------------------------------------
+
+# Se muestran los resultados utilizados en los títulos y las interpretaciones.
+cat("Promedio nacional ponderado de informalidad:", percent(tasa_nacional, accuracy = 0.1, decimal.mark = ","), "\n")
+cat("Tasa ponderada de informalidad en Ñuble:", percent(tasa_nuble, accuracy = 0.1, decimal.mark = ","), "\n")
+cat("Regiones con tasa femenina mayor:", n_regiones_mujer_mayor, "de 16\n")
+print(regional_informalidad)
+print(regional_sexo)
+print(informalidad_edad)
+
+# Antes de entregar:
+# - Ejecutar todo el script desde el proyecto .Rproj.
+# - Revisar que los cinco PNG y los dos formatos de la figura compuesta existan.
+# - Confirmar que las fuentes y los títulos se lean al tamaño final.
+# - Explicar por qué las tasas ENE están ponderadas con fact_cal.

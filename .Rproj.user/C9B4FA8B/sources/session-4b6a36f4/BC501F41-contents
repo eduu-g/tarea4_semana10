@@ -1,0 +1,292 @@
+# =============================================================================
+# T4 — PORTAFOLIO DE VISUALIZACIÓN CON GGPLOT2
+# Parte 1 · Semana 10 · Tres gráficos con tres bases distintas
+# Fundamentos de Programación para Análisis Económico · UdeC-EAN
+#
+# Autor: [ESCRIBE TU NOMBRE]
+# Fecha: [ESCRIBE LA FECHA]
+#
+# Este script debe ejecutarse desde la carpeta principal del proyecto .Rproj.
+# Archivos requeridos dentro de data/raw/:
+#   - casen_reducido.csv
+#   - salario_minimo_chile.csv
+#   - ene-2026-06-mjj.csv
+#
+# Paquetes: dplyr, tidyr, ggplot2, scales
+# Si falta alguno, instalarlo previamente con install.packages("nombre_paquete").
+# =============================================================================
+
+# 0. Preparación ---------------------------------------------------------------
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+
+# Colores accesibles y consistentes para los gráficos.
+azul <- "#0072B2"       # azul Okabe-Ito
+naranjo <- "#D55E00"    # naranjo Okabe-Ito
+oro <- "#E69F00"
+
+# Formato de pesos chilenos para los ejes.
+pesos <- label_currency(prefix = "$", big.mark = ".", decimal.mark = ",", accuracy = 1)
+
+# Crear carpeta de salida si todavía no existe.
+dir.create("output/figuras", recursive = TRUE, showWarnings = FALSE)
+
+# Comprobar que las tres bases estén en la ubicación indicada.
+archivos <- c(
+  "data/raw/casen_reducido.csv",
+  "data/raw/salario_minimo_chile.csv",
+  "data/raw/ene-2026-06-mjj.csv"
+)
+if (!all(file.exists(archivos))) {
+  stop("Faltan archivos en data/raw/. Revisa los nombres y la estructura del proyecto.")
+}
+
+# 1. Gráfico CASEN: educación e ingreso por género ----------------------------
+
+# Se cargan los datos CASEN. La base tiene 60 personas y 5 ingresos faltantes.
+casen <- read.csv("data/raw/casen_reducido.csv")
+
+# Para el gráfico se excluyen únicamente las observaciones sin ingreso.
+casen_grafico <- casen |>
+  filter(!is.na(ingreso), !is.na(educ), !is.na(genero)) |>
+  mutate(
+    genero = factor(genero, levels = c("F", "M"),
+                    labels = c("Mujeres", "Hombres"))
+  )
+
+# Scatter: cada punto es una persona; el color identifica el género.
+# geom_smooth hereda el color de genero, por lo que estima una recta por grupo.
+p1_casen <- ggplot(casen_grafico, aes(x = educ, y = ingreso, color = genero)) +
+  geom_point(size = 2.3, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  scale_color_manual(values = c("Mujeres" = naranjo, "Hombres" = azul)) +
+  scale_y_continuous(labels = pesos) +
+  labs(
+    title = "El ingreso aumenta con la escolaridad en ambos géneros",
+    subtitle = "Las rectas permiten comparar por separado la relación para mujeres y hombres",
+    x = "Años de escolaridad",
+    y = "Ingreso mensual (pesos chilenos)",
+    color = NULL,
+    caption = "Fuente: CASEN, muestra reducida utilizada en el curso; 55 observaciones con ingreso válido."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#223C6A"),
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom"
+  )
+
+# Mostrar el gráfico en RStudio.
+p1_casen
+
+# Pregunta de la tarea:
+# ¿Qué pregunta responde este gráfico que no respondería la versión con una sola recta?
+# Respuesta: permite observar si la pendiente y el nivel de la relación entre
+# escolaridad e ingreso son distintos para mujeres y hombres. Una sola recta
+# resume ambos grupos y puede ocultar diferencias entre sus patrones.
+# En esta muestra, las pendientes estimadas son aproximadamente $46.862 por año
+# de educación para mujeres y $38.295 para hombres. Son asociaciones descriptivas,
+# no efectos causales.
+
+# Exportar a 300 dpi.
+ggsave(
+  filename = "output/figuras/t4_p1_casen_educacion_ingreso.png",
+  plot = p1_casen, width = 8, height = 5, units = "in", dpi = 300
+)
+
+# 2. Gráfico salario mínimo: nominal contra real ------------------------------
+
+# La columna IPC del archivo se utiliza como índice con base 2010 = 100.
+# La conversión a pesos de 2010 es: salario nominal / (IPC / 100).
+salario <- read.csv("data/raw/salario_minimo_chile.csv") |>
+  mutate(
+    salario_real_2010 = salario_minimo / (ipc / 100)
+  )
+
+# pivot_longer() pasa las dos series desde formato ancho a formato largo.
+salario_largo <- salario |>
+  select(anio, salario_minimo, salario_real_2010) |>
+  pivot_longer(
+    cols = c(salario_minimo, salario_real_2010),
+    names_to = "serie",
+    values_to = "salario"
+  ) |>
+  mutate(
+    serie = recode(
+      serie,
+      salario_minimo = "Nominal",
+      salario_real_2010 = "Real (pesos de 2010)"
+    )
+  )
+
+# Se extrae la observación final de cada serie para colocar etiquetas directas.
+etiquetas_salario <- salario_largo |>
+  group_by(serie) |>
+  filter(anio == max(anio)) |>
+  ungroup()
+
+p2_salario <- ggplot(
+  salario_largo,
+  aes(x = anio, y = salario, color = serie, linetype = serie, group = serie)
+) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 1.8) +
+  geom_text(
+    data = etiquetas_salario,
+    aes(x = anio, y = salario, label = serie, color = serie),
+    inherit.aes = FALSE,
+    hjust = 0,
+    nudge_x = 0.25,
+    size = 3.2,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = c(
+    "Nominal" = azul,
+    "Real (pesos de 2010)" = naranjo
+  )) +
+  scale_linetype_manual(values = c(
+    "Nominal" = "solid",
+    "Real (pesos de 2010)" = "dashed"
+  )) +
+  scale_x_continuous(
+    breaks = salario$anio,
+    expand = expansion(mult = c(0.01, 0.25))
+  ) +
+  scale_y_continuous(labels = pesos) +
+  coord_cartesian(clip = "off") +
+  labs(
+    title = "El salario mínimo real creció menos que el nominal entre 2014 y 2025",
+    x = "Año",
+    y = "Salario mínimo mensual",
+    color = NULL,
+    linetype = NULL,
+    caption = "Fuente: salario_minimo_chile.csv, material del curso. Salario real expresado en pesos de 2010."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#223C6A"),
+    panel.grid.minor = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(5.5, 120, 5.5, 5.5)
+  )
+
+p2_salario
+
+# Preguntas de la tarea:
+# ¿Por qué aquí el eje Y no necesita partir en 0 y en un gráfico de barras sí?
+# Respuesta: la línea comunica la trayectoria y los cambios a través del tiempo;
+# el eje puede mostrar un rango focalizado si está claramente rotulado y no se
+# oculta información relevante. En barras, la longitud se compara desde una base,
+# por lo que truncar el cero distorsiona la magnitud visual de las diferencias.
+# ¿Qué ganas usando color y tipo de línea?
+# Respuesta: una codificación redundante: cada serie se distingue por dos señales
+# visuales, lo que mejora la identificación y no depende exclusivamente del color.
+
+# Exportar a 300 dpi.
+ggsave(
+  filename = "output/figuras/t4_p1_salario_minimo.png",
+  plot = p2_salario, width = 9, height = 5.5, units = "in", dpi = 300
+)
+
+# 3. Gráfico ENE: composición ocupacional por sexo ----------------------------
+
+# La ENE usa separador ; y coma decimal; por eso se importa con read.csv2().
+ene <- read.csv2("data/raw/ene-2026-06-mjj.csv")
+
+# Se conservan solo personas ocupadas y ponderadores válidos.
+ene_ocupados <- ene |>
+  filter(activ == 1, !is.na(fact_cal), fact_cal > 0)
+
+# Etiquetas según el manual de códigos ENE para categoria_ocupacion.
+categorias_ocupacion <- c(
+  "1" = "Empleador/a",
+  "2" = "Cuenta propia",
+  "3" = "Asalariado/a sector privado",
+  "4" = "Asalariado/a sector público",
+  "5" = "Servicio doméstico puertas afuera",
+  "6" = "Servicio doméstico puertas adentro",
+  "7" = "Familiar no remunerado"
+)
+
+# Se preparan las variables de sexo y categoría ocupacional para el gráfico.
+ene_composicion <- ene_ocupados |>
+  filter(categoria_ocupacion %in% 1:7, sexo %in% c(1, 2)) |>
+  mutate(
+    sexo = factor(sexo, levels = c(1, 2), labels = c("Hombres", "Mujeres")),
+    categoria_ocupacion = factor(
+      categoria_ocupacion,
+      levels = 1:7,
+      labels = unname(categorias_ocupacion)
+    )
+  )
+
+# Tabla ponderada para responder la pregunta con cifras.
+composicion_sexo_categoria <- ene_composicion |>
+  group_by(sexo, categoria_ocupacion) |>
+  summarise(peso_categoria = sum(fact_cal), .groups = "drop") |>
+  group_by(sexo) |>
+  mutate(porcentaje = peso_categoria / sum(peso_categoria)) |>
+  ungroup()
+
+# Diferencia absoluta entre la participación de mujeres y hombres por categoría.
+brechas_categoria <- composicion_sexo_categoria |>
+  select(sexo, categoria_ocupacion, porcentaje) |>
+  pivot_wider(names_from = sexo, values_from = porcentaje) |>
+  mutate(diferencia_pp = abs(Mujeres - Hombres) * 100) |>
+  arrange(desc(diferencia_pp))
+
+print(composicion_sexo_categoria)
+print(brechas_categoria)
+
+# Barras apiladas al 100 %: dentro de cada sexo, muestra la composición por categoría.
+# weight = fact_cal hace que los conteos utilicen el factor de expansión calibrado.
+p3_ene_composicion <- ggplot(
+  ene_composicion,
+  aes(x = sexo, fill = categoria_ocupacion, weight = fact_cal)
+) +
+  geom_bar(position = "fill", color = "white", linewidth = 0.25) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(labels = label_percent(decimal.mark = ",")) +
+  labs(
+    title = "El empleo privado pesa más entre hombres y el público entre mujeres",
+    subtitle = "Composición porcentual de las categorías ocupacionales dentro de cada sexo",
+    x = NULL,
+    y = "Proporción ponderada",
+    fill = "Categoría ocupacional",
+    caption = "Fuente: ENE, mayo-julio de 2026. Personas ocupadas (activ = 1); ponderado con fact_cal."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#223C6A"),
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom",
+    legend.text = element_text(size = 8)
+  ) +
+  guides(fill = guide_legend(nrow = 4, byrow = TRUE))
+
+p3_ene_composicion
+
+# Respuesta con las cifras ponderadas de esta base:
+# La mayor diferencia corresponde a asalariados/as del sector privado:
+# hombres 64,88 % y mujeres 53,95 % (brecha de 10,93 puntos porcentuales).
+# La participación más parecida está en cuenta propia: hombres 21,11 % y mujeres
+# 21,19 % (diferencia aproximada de 0,08 pp).
+# Sin fact_cal se obtienen proporciones muestrales, no estimaciones ponderadas:
+# por ejemplo, la brecha de asalariado privado pasa aproximadamente a 12,52 pp
+# y la de cuenta propia a 0,30 pp. Por eso no se deben presentar como cifras
+# representativas del país las proporciones sin ponderar.
+
+# Exportar a 300 dpi.
+ggsave(
+  filename = "output/figuras/t4_p1_ene_composicion_sexo.png",
+  plot = p3_ene_composicion, width = 9, height = 6, units = "in", dpi = 300
+)
+
+# 4. Cierre --------------------------------------------------------------------
+
+# Los tres gráficos se guardan en output/figuras/.
+# Antes de entregar, abre cada PNG y comprueba títulos, etiquetas, leyendas y fuente.
+# Ejecuta el script completo desde el proyecto .Rproj para verificar reproducibilidad.
