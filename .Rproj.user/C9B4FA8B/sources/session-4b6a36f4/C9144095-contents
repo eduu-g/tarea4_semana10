@@ -1,0 +1,99 @@
+# T4 — Portafolio de visualización económica con ggplot2
+
+Proyecto de visualización de datos económicos en R que desarrolla dos scripts: la Parte 1 compara educación e ingresos, salario mínimo nominal y real, y composición ocupacional por sexo; la Parte 2 analiza la informalidad laboral por región, sexo y edad, además de construir una figura compuesta con `patchwork`.
+
+## Datos
+
+Los archivos originales deben estar ubicados en `data/raw/`:
+
+- **CASEN reducido:** `casen_reducido.csv`. Muestra de 60 personas utilizada en el curso. Para los gráficos de ingreso se excluyen las observaciones sin ingreso válido; quedan 55 observaciones.
+- **Salario mínimo de Chile:** `salario_minimo_chile.csv`. Serie de salario mínimo nominal e IPC para el período 2014–2025. El script de la Parte 1 calcula el salario real en pesos de 2010 utilizando el IPC con base 2010 = 100.
+- **Encuesta Nacional de Empleo (ENE):** `ene-2026-06-mjj.csv`. Datos correspondientes al trimestre móvil mayo–julio de 2026. Se importa con `read.csv2()` debido a su formato. Para los análisis de informalidad se consideran personas ocupadas (`activ == 1`) y se utilizan los factores de expansión `fact_cal`.
+
+En los análisis de informalidad se identifica como informal a la persona ocupada con `ocup_form == 2`; se consideran las categorías `ocup_form` 1 y 2 para calcular las tasas. En el análisis de horas habituales se excluyen los valores faltantes y los códigos centinela 888 y 999. El boxplot de horas por sexo describe la muestra y es **no ponderado**, tal como se indica en el gráfico.
+
+## Qué contiene el proyecto
+
+### Parte 1 — Semana 10 (`t4_parte1.R`)
+
+Genera tres gráficos:
+
+1. **CASEN — educación e ingreso por género:** diagrama de dispersión con una recta de regresión para mujeres y otra para hombres. Permite comparar descriptivamente la relación entre años de escolaridad e ingreso mensual por género.
+2. **Salario mínimo nominal y real:** gráfico de líneas para 2014–2025. El salario real se expresa en pesos de 2010; las series se distinguen mediante color y tipo de línea, con etiquetas directas al final.
+3. **ENE — composición ocupacional por sexo:** barras apiladas al 100 % que muestran la composición de las categorías ocupacionales dentro de cada sexo. Se utiliza `fact_cal` para ponderar las estimaciones.
+
+Las figuras se guardan en `output/figuras/`:
+
+- `t4_p1_casen_educacion_ingreso.png`
+- `t4_p1_salario_minimo.png`
+- `t4_p1_ene_composicion_sexo.png`
+
+### Parte 2 — Semana 11 (`t4_parte2.R`)
+
+Genera cinco gráficos y una figura compuesta:
+
+1. **CASEN — educación e ingreso:** gráfico de dispersión con rectas separadas por género, utilizado como referencia de estilo.
+2. **ENE — informalidad por región:** tasas regionales ponderadas con `fact_cal`, con Ñuble resaltada y una línea de referencia para el promedio nacional.
+3. **ENE — horas habituales por sexo:** boxplot de la distribución de horas semanales, excluyendo `NA`, 888 y 999. Es una descripción no ponderada de la muestra.
+4. **ENE — informalidad de mujeres y hombres por región:** gráfico de dispersión con etiquetas regionales y diagonal de igualdad como referencia.
+5. **ENE — informalidad por tramo de edad:** evolución de la tasa ponderada de informalidad entre los tramos de edad.
+
+La figura compuesta reúne los gráficos regional, por sexo y por edad en paneles A, B y C. Se exporta en PNG a 300 dpi y en PDF.
+
+Las figuras se guardan en `output/figuras/`:
+
+- `t4_p2_grafico1_casen.png`
+- `t4_p2_grafico2_informalidad_region.png`
+- `t4_p2_grafico3_horas_sexo.png`
+- `t4_p2_grafico4_informalidad_sexo_region.png`
+- `t4_p2_grafico5_informalidad_edad.png`
+- `t4_p2_figura_compuesta.png`
+- `t4_p2_figura_compuesta.pdf`
+
+## Cómo correrlo
+
+1. Abrir el proyecto desde su archivo `.Rproj` en RStudio. Los scripts utilizan rutas relativas y deben ejecutarse desde la carpeta principal del proyecto.
+2. Comprobar que las tres bases estén en `data/raw/` con los nombres indicados en la sección **Datos**.
+3. Instalar previamente los paquetes que no estén disponibles:
+
+   ```r
+   install.packages(c(
+     "dplyr", "tidyr", "ggplot2", "scales",
+     "ggrepel", "patchwork"
+   ))
+   ```
+
+4. Ejecutar primero `scripts/t4_parte1.R` y después `scripts/t4_parte2.R`. Cada script carga los paquetes que necesita, crea `output/figuras/` si no existe y guarda sus gráficos mediante `ggsave()`.
+
+## Estructura
+
+```text
+proyecto/
+├── data/
+│   └── raw/
+│       ├── casen_reducido.csv
+│       ├── salario_minimo_chile.csv
+│       └── ene-2026-06-mjj.csv
+├── scripts/
+│   ├── t4_parte1.R
+│   └── t4_parte2.R
+├── output/
+│   └── figuras/
+│       ├── [figuras PNG de la Parte 1]
+│       ├── [figuras PNG de la Parte 2]
+│       └── t4_p2_figura_compuesta.pdf
+└── README.md
+```
+
+## Autor
+
+Eduardo Guerrero — noviembre de 2026
+
+
+```markdown
+## Declaración de autoría y uso de IA
+- Herramienta utilizada: ChatGPT (o «ninguna»)
+- Para qué la usé: Orden y organización de los scripts, ayuda de redacción del README, resolución de dudas sobre codigos
+- Qué hice yo: Redacción del codigo, formulación y analisis de las preguntas
+- Verificación: confirmo que entiendo y puedo explicar todo lo que entrego.
+```
