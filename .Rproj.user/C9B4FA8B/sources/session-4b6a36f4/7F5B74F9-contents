@@ -1,10 +1,6 @@
-# =============================================================================
-# T4 — PORTAFOLIO DE VISUALIZACIÓN CON GGPLOT2
-# Parte 2 · Semana 11 · Cinco gráficos y una figura compuesta
-# Fundamentos de Programación para Análisis Económico · UdeC-EAN
 #
-# Autor: [ESCRIBE TU NOMBRE]
-# Fecha: [ESCRIBE LA FECHA]
+# Autor: Eduardo Guerrero
+# Fecha: 03/11/2026
 #
 # Ejecutar desde la carpeta principal del proyecto .Rproj.
 # Archivos requeridos dentro de data/raw/:
@@ -12,10 +8,8 @@
 #   - ene-2026-06-mjj.csv
 #
 # Paquetes: dplyr, tidyr, ggplot2, scales, ggrepel, patchwork
-# Instala previamente los que falten con install.packages("nombre_paquete").
-# =============================================================================
 
-# 0. Preparación ---------------------------------------------------------------
+# 0. Preparación 
 
 library(dplyr)
 library(tidyr)
@@ -53,7 +47,7 @@ if (!all(file.exists(archivos))) {
   stop("Faltan archivos en data/raw/. Revisa los nombres y la estructura del proyecto.")
 }
 
-# 1. Gráfico 1 — Scatter CASEN: educación e ingreso por género -----------------
+# 1. Gráfico 1 — Scatter CASEN: educación e ingreso por género 
 
 casen <- read.csv("data/raw/casen_reducido.csv")
 
@@ -85,7 +79,7 @@ ggsave(
   plot = p1_casen, width = 8, height = 5, units = "in", dpi = 300
 )
 
-# 2. Preparar ENE: ocupados, sexo, región e informalidad ----------------------
+# 2. Preparar ENE: ocupados, sexo, región e informalidad 
 
 # read.csv2() corresponde al archivo ENE: separador ; y decimal con coma.
 ene <- read.csv2("data/raw/ene-2026-06-mjj.csv")
@@ -117,7 +111,7 @@ tasa_nacional <- weighted.mean(
   na.rm = TRUE
 )
 
-# 3. Gráfico 2 — Tasa de informalidad por región -------------------------------
+# 3. Gráfico 2 — Tasa de informalidad por región 
 
 # Se calcula una tasa ponderada por región.
 regional_informalidad <- ene_formalidad |>
@@ -182,7 +176,7 @@ ggsave(
   plot = p2_regiones, width = 9, height = 7, units = "in", dpi = 300
 )
 
-# 4. Gráfico 3 — Distribución de horas habituales por sexo --------------------
+# 4. Gráfico 3 — Distribución de horas habituales por sexo 
 
 # Se eliminan NA y los códigos centinela 888 y 999 en habituales.
 horas_ocupados <- ene_ocupados |>
@@ -224,7 +218,7 @@ ggsave(
 # Como el boxplot se calcula sin ponderar, el título y la caption se refieren
 # explícitamente a la muestra, no a toda la población de Chile.
 
-# 5. Gráfico 4 — Informalidad de mujeres contra hombres por región -------------
+# 5. Gráfico 4 — Informalidad de mujeres contra hombres por región 
 
 regional_sexo <- ene_formalidad |>
   group_by(region_txt, sexo_txt) |>
@@ -297,7 +291,7 @@ ggsave(
   plot = p4_sexo_region, width = 8, height = 7, units = "in", dpi = 300
 )
 
-# 6. Gráfico 5 — Pregunta propia: informalidad según tramo de edad -------------
+# 6. Gráfico 5 — Pregunta propia: informalidad según tramo de edad 
 
 # Pregunta: ¿cómo cambia la tasa de ocupación informal entre los tramos de edad?
 tramos_edad <- c(
@@ -345,7 +339,7 @@ ggsave(
 # 51,9 % en 65–69 y 62,0 % en 70 años o más. En 15–19 años también es elevada
 # (44,1 %), por lo que la relación no es estrictamente creciente durante toda la vida.
 
-# 7. Figura compuesta con patchwork --------------------------------------------
+# 7. Figura compuesta con patchwork 
 
 # Se crean versiones compactas de los gráficos 2, 4 y 5.
 # Se reducen títulos, textos y márgenes para evitar superposiciones.
@@ -363,7 +357,7 @@ tema_panel <- tema_t4(base = 10) +
   )
 
 
-# PANEL A: informalidad por región --------------------------------------------
+# PANEL A: informalidad por región 
 
 p2_comp <- ggplot(
   regional_informalidad,
@@ -406,7 +400,7 @@ p2_comp <- ggplot(
   tema_panel
 
 
-# PANEL B: informalidad de mujeres frente a hombres ----------------------------
+# PANEL B: informalidad de mujeres frente a hombres 
 
 p4_comp <- ggplot(
   regional_sexo,
@@ -464,7 +458,7 @@ p4_comp <- ggplot(
   )
 
 
-# PANEL C: informalidad según tramo de edad -----------------------------------
+# PANEL C: informalidad según tramo de edad 
 
 p5_comp <- ggplot(
   informalidad_edad,
@@ -489,7 +483,7 @@ p5_comp <- ggplot(
   )
 
 
-# COMPOSICIÓN: A a la izquierda; B y C a la derecha ----------------------------
+# COMPOSICIÓN: A a la izquierda; B y C a la derecha 
 
 figura <- (p2_comp | (p4_comp / p5_comp)) +
   plot_layout(
@@ -516,7 +510,7 @@ figura <- (p2_comp | (p4_comp / p5_comp)) +
 figura
 
 
-# EXPORTAR: PNG a 300 dpi y PDF vectorial -------------------------------------
+# EXPORTAR: PNG a 300 dpi y PDF vectorial 
 
 ggsave(
   filename = "output/figuras/t4_p2_figura_compuesta.png",
@@ -534,7 +528,7 @@ ggsave(
   height = 14,
   units = "in"
 )
-# 8. Reflexión para README (media página) --------------------------------------
+# 8. Reflexión
 
 # 1. ¿Cuál de los cinco gráficos comunica mejor su hallazgo y por qué?
 # El gráfico 4 comunica de forma directa la comparación regional por sexo:
@@ -554,7 +548,7 @@ ggsave(
 # de informalidad no es uniforme entre regiones ni grupos, sin confundir las
 # distintas comparaciones ni perder las escalas propias de cada gráfico.
 
-# 9. Comprobaciones finales ----------------------------------------------------
+# 9. Comprobaciones finales 
 
 # Se muestran los resultados utilizados en los títulos y las interpretaciones.
 cat("Promedio nacional ponderado de informalidad:", percent(tasa_nacional, accuracy = 0.1, decimal.mark = ","), "\n")

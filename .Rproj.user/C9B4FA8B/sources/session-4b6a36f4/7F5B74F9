@@ -3,24 +3,24 @@
     "path": "~/GitHub/tarea4_semana10/scripts/t4_parte2.R",
     "project_path": "scripts/t4_parte2.R",
     "type": "r_source",
-    "hash": "0",
+    "hash": "2180349181",
     "contents": "",
-    "dirty": true,
+    "dirty": false,
     "created": 1793757682367.0,
     "source_on_save": false,
     "relative_order": 2,
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "565,0",
-        "scrollLine": "520"
+        "cursorPosition": "0,1",
+        "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1793757682,
+    "lastKnownWriteTime": 1793759445,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1793758711878,
+    "last_content_update": 1793759445237,
     "read_only": false,
     "read_only_alternatives": []
 }
